@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image to 3D Asset with TRELLIS</title>
+<style>
+/* ═══════════ Gradio 5.34.2 dark theme 复刻（对照官方 trellis-community Space） ═══════════ */
+:root{
+  --body-background-fill:#0b0f19;
+  --body-text-color:#f5f5f5;
+  --block-background-fill:#0b0f19;
+  --block-border-color:#2a2d35;
+  --block-border-width:1px;
+  --border-color-primary:#2a2d35;
+  --input-background-fill:#12151f;
+  --input-border-color:#2a2d35;
+  --button-primary-background-fill:#7c4dff;
+  --button-primary-background-fill-hover:#8a5cf6;
+  --button-primary-text-color:#ffffff;
+  --button-secondary-background-fill:#2a2d35;
+  --button-secondary-background-fill-hover:#3a3d45;
+  --button-secondary-text-color:#f5f5f5;
+  --color-accent:#7c4dff;
+  --block-radius:10px;
+  --block-padding:8px;
+  font-size:17px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;min-height:100%}
+body{
+  background:var(--body-background-fill);
+  color:var(--body-text-color);
+  font-family:'Source Sans Pro','Helvetica Neue',Helvetica,Arial,ui-sans-serif,system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;
+  -webkit-font-smoothing:antialiased;
+}
+.gradio-container{width:100%;max-width:1010px;padding:12px 16px 48px;flex-grow:1}
+
+/* markdown 头部 */
+.prose h2{margin:0 0 8px;font-size:1.4em;font-weight:700;color:var(--body-text-color)}
+.prose a{color:var(--color-accent);text-decoration:none}
+.prose ul{margin:4px 0;padding-left:22px}
+.prose li{margin:3px 0;line-height:1.5}
+.prose code{background:#1c2030;padding:1px 6px;border-radius:4px;font-size:0.88em}
+.prose p{margin:6px 0;line-height:1.5}
+.prose em{color:#a9adba}
+
+/* block 面板 */
+.block{
+  background:var(--block-background-fill);
+  border:var(--block-border-width) solid var(--block-border-color);
+  border-radius:var(--block-radius);
+  padding:var(--block-padding);
+  margin:10px 0;
+}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.column{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+
+/* tabs */
+.tab-container{display:flex;gap:2px;border-bottom:1px solid var(--block-border-color);margin-bottom:12px}
+.tab{
+  background:transparent;border:none;color:#a9adba;cursor:pointer;
+  padding:8px 14px;font-size:0.95em;font-weight:500;border-bottom:2px solid transparent;font-family:inherit;
+}
+.tab.selected{color:var(--body-text-color);border-bottom-color:var(--color-accent)}
+.tabpanel{display:none}
+.tabpanel.active{display:block}
+
+/* 手风琴 */
+.accordion>.acc-head{
+  width:100%;background:transparent;border:none;color:var(--body-text-color);
+  display:flex;justify-content:space-between;align-items:center;padding:2px 0;margin:0;
+  font-size:1.02em;font-weight:600;cursor:pointer;text-align:left;font-family:inherit;
+}
+.acc-head .icon{transition:transform .18s;color:#a9adba;font-size:0.6em}
+.accordion.open .icon{transform:rotate(90deg)}
+.acc-body{display:none;margin-top:12px}
+.accordion.open .acc-body{display:block}
+
+/* settings fields */
+.field{margin:10px 0;padding:6px 0}
+.field .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.field .head label{font-weight:600;color:var(--body-text-color);font-size:0.95em}
+.reset-button{
+  background:var(--button-secondary-background-fill);border:none;color:var(--button-secondary-text-color);
+  border-radius:5px;padding:1px 8px;cursor:pointer;font-size:0.85em;font-family:inherit;
+}
+.reset-button:hover{background:var(--button-secondary-background-fill-hover)}
+.slider_input_container{display:flex;align-items:center;gap:8px}
+.slider_input_container .min_value,.slider_input_container .max_value{font-size:0.78em;color:#a9adba;min-width:40px;text-align:center}
+input[type=number]{
+  background:var(--input-background-fill);border:1px solid var(--input-border-color);
+  color:var(--body-text-color);border-radius:6px;padding:3px 8px;width:120px;font-size:0.9em;font-family:inherit;
+}
+input[type=number]:focus{outline:none;border-color:var(--color-accent)}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;flex:1;height:5px;border-radius:3px;outline:none;cursor:pointer;
+  background:linear-gradient(to right,var(--color-accent) var(--range_progress,0%),#2a2d35 var(--range_progress,0%));
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--color-accent);border:2px solid #fff;cursor:pointer;
+}
+input[type=range]::-moz-range-thumb{
+  width:13px;height:13px;border-radius:50%;background:var(--color-accent);border:2px solid #fff;cursor:pointer;
+}
+.label-check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.93em;color:var(--body-text-color)}
+.label-check input[type=checkbox]{width:16px;height:16px;accent-color:var(--color-accent);cursor:pointer}
+.radio-group label{display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer;font-size:0.93em;color:var(--body-text-color)}
+.radio-group input[type=radio]{accent-color:var(--color-accent);cursor:pointer}
+
+/* upload */
+.block-label{
+  display:flex;align-items:center;gap:6px;color:#a9adba;font-size:0.84em;font-weight:600;margin:0 0 6px 2px;
+}
+.block-label svg{width:14px;height:14px}
+.upload-zone{
+  height:300px;border:1px dashed var(--border-color-primary);border-radius:var(--block-radius);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;
+  position:relative;background:var(--input-background-fill);overflow:hidden;text-align:center;
+}
+.upload-zone:hover{border-color:var(--color-accent)}
+.upload-zone .ic{width:40px;height:40px;color:#a9adba;margin-bottom:10px}
+.upload-zone .big{font-size:1.02em;color:var(--body-text-color)}
+.upload-zone .or{color:#a9adba}
+.upload-zone img.preview{max-width:100%;max-height:100%;object-fit:contain}
+.upload-zone.has-model{border-style:solid}
+
+/* buttons */
+.btn{
+  border:none;border-radius:8px;padding:9px 18px;font-size:1em;cursor:pointer;font-weight:600;
+  transition:background .15s;text-decoration:none;display:inline-block;font-family:inherit;
+}
+.btn-primary{background:var(--button-primary-background-fill);color:var(--button-primary-text-color)}
+.btn-primary:hover{background:var(--button-primary-background-fill-hover)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-secondary{background:var(--button-secondary-background-fill);color:var(--button-secondary-text-color)}
+.btn-secondary:hover{background:var(--button-secondary-background-fill-hover)}
+.btn-secondary:disabled{opacity:.5;cursor:not-allowed}
+.button-row{display:flex;gap:10px;margin:14px 0 4px}
+.note{font-size:0.85em;color:#a9adba;margin:6px 0;line-height:1.4}
+
+/* output model */
+.model3d{
+  width:100%;height:430px;background:#0f1320;border-radius:var(--block-radius);
+  position:relative;overflow:hidden;border:1px solid var(--block-border-color);
+}
+.model3d model-viewer{width:100%;height:100%}
+.model3d .placeholder{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#5a5f6e;gap:8px;
+}
+.model3d .placeholder svg{width:42px;height:42px}
+.model3d.has-model .placeholder{display:none}
+
+/* status */
+#statusBar{margin:8px 0;font-size:0.92em;color:var(--color-accent);white-space:pre-wrap}
+.progress-track{height:6px;background:#2a2d35;border-radius:3px;overflow:hidden;margin-top:6px}
+.progress-bar{height:100%;width:0%;background:var(--color-accent);transition:width .4s}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--color-accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none}
+</style>
+</head>
+<body class="theme-loaded dark">
+<div class="gradio-container">
+
+  <!-- ═══ 头部 markdown（对照官方，逐字一致） ═══ -->
+  <div class="block">
+    <div class="prose">
+      <h2>Image to 3D Asset with <a href="https://trellis3d.github.io/" target="_blank">TRELLIS</a></h2>
+      <ul>
+        <li>Upload an image and click "Generate &amp; Extract GLB" to create a 3D asset and automatically extract the GLB file.</li>
+        <li>If you want the Gaussian file as well, click "Extract Gaussian" after generation.</li>
+        <li>If the image has alpha channel, it will be used as the mask. Otherwise, we use <code>rembg</code> to remove the background.</li>
+      </ul>
+      <p>✨New: 1) Experimental multi-image support. 2) Gaussian file extraction.</p>
+    </div>
+  </div>
+
+  <div class="row" style="align-items:flex-start">
+    <div class="column" style="flex-grow:1;min-width:min(320px,100%)">
+
+      <!-- ═══ Tabs: Single / Multiple ═══ -->
+      <div class="block" style="margin-top:0">
+        <div class="tab-container">
+          <button class="tab selected" data-tab="single">Single Image </button>
+          <button class="tab" data-tab="multiple">Multiple Images </button>
+        </div>
+
+        <!-- Single Image -->
+        <div class="tabpanel active" id="panel-single">
+          <div class="block-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Image Prompt
+          </div>
+          <div class="upload-zone" id="dropzone">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <div class="big">将图像拖放到此处 <span class="or">- 或 -</span> 点击上传</div>
+            <input type="file" id="fileInput" accept="image/*" style="display:none">
+          </div>
+        </div>
+
+        <!-- Multiple Images -->
+        <div class="tabpanel" id="panel-multiple">
+          <div class="block-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+            Image Prompt
+          </div>
+          <div class="upload-zone" id="dropzoneMulti">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <div class="big">在此处放置媒体文件 <span class="or">- 或 -</span> 点击上传</div>
+            <input type="file" id="fileInputMulti" accept="image/*, video/*" multiple style="display:none">
+          </div>
+          <div class="prose">
+            <p>Input different views of the object in separate images. </p>
+            <p><em>NOTE: this is an experimental algorithm without training a specialized model. It may not produce the best results for all images, especially those having different poses or inconsistent details.</em></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Generation Settings ═══ -->
+      <div class="block accordion" id="acc-gen">
+        <button class="acc-head"><span>Generation Settings</span><span class="icon">▶</span></button>
+        <div class="acc-body">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+            <div class="field" style="flex:2;min-width:220px;margin-top:0">
+              <div class="head"><label>Seed</label><button class="reset-button" onclick="resetField('seed')">↺</button></div>
+              <div class="slider_input_container">
+                <span class="min_value">0</span>
+                <input type="range" id="seed" min="0" max="2147483647" step="1" data-default="0">
+                <span class="max_value">2147483647</span>
+              </div>
+              <input type="number" id="seed_num" min="0" max="2147483647" step="1" class="hidden">
+            </div>
+            <div class="field" style="flex:1;min-width:150px">
+              <label class="label-check"><input type="checkbox" id="randomize" checked> Randomize Seed</label>
+            </div>
+          </div>
+
+          <div class="prose"><p>Stage 1: Sparse Structure Generation</p></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:2;min-width:220px">
+              <div class="head"><label>Guidance Strength</label><button class="reset-button" onclick="resetField('ss_cfg')">↺</button></div>
+              <div class="slider_input_container">
+                <span class="min_value">0</span>
+                <input type="range" id="ss_cfg" min="0" max="10" step="0.1" data-default="7.5">
+                <span class="max_value">10</span>
+              </div>
+            </div>
+            <div class="field" style="flex:1;min-width:170px">
+              <div class="head"><label>Sampling Steps</label><button class="reset-button" onclick="resetField('ss_steps')">↺</button></div>
+              <div class="slider_input_container">
+                <span class="min_value">1</span>
+                <input type="range" id="ss_steps" min="1" max="50" step="1" data-default="12">
+                <span class="max_value">50</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="prose"><p>Stage 2: Structured Latent Generation</p></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:2;min-width:220px">
+              <div class="head"><label>Guidance Strength</label><button class="reset-button" onclick="resetField('slat_cfg')">↺</button></div>
+              <div class="slider_input_container">
+                <span class="min_value">0</span>
+                <input type="range" id="slat_cfg" min="0" max="10" step="0.1" data-default="3.0">
+                <span class="max_value">10</span>
+              </div>
+            </div>
+            <div class="field" style="flex:1;min-width:170px">
+              <div class="head"><label>Sampling Steps</label><button class="reset-button" onclick="resetField('slat_steps')">↺</button></div>
+              <div class="slider_input_container">
+                <span class="min_value">1</span>
+                <input type="range" id="slat_steps" min="1" max="50" step="1" data-default="12">
+                <span class="max_value">50</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="prose"><p>Multi-image algorithm</p></div>
+          <div class="radio-group">
+            <label><input type="radio" name="alg" value="stochastic" checked> stochastic</label>
+            <label><input type="radio" name="alg" value="multidiffusion"> multidiffusion</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ GLB Extraction Settings ═══ -->
+      <div class="block accordion" id="acc-glb">
+        <button class="acc-head"><span>GLB Extraction Settings</span><span class="icon">▶</span></button>
+        <div class="acc-body">
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:200px;margin-top:0">
+              <div class="head"><label>Simplify</label><button class="reset-button" onclick="resetField('simplify')">↺</button></div>
+              <div class="slider_input_container">
+                <span class="min_value">0.9</span>
+                <input type="range" id="simplify" min="0.9" max="0.98" step="0.01" data-default="0.95">
+                <span class="max_value">0.98</span>
+              </div>
+            </div>
+            <div class="field" style="flex:1;min-width:200px">
+              <div class="head"><label>Texture Size</label><button class="reset-button" onclick="resetField('texture_size')">↺</button></div>
+              <div class="slider_input_container">
+                <span class="min_value">512</span>
+                <input type="range" id="texture_size" min="512" max="4096" step="512" data-default="1024">
+                <span class="max_value">4096</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 按钮 ═══ -->
+      <div class="button-row">
+        <button class="btn btn-primary" id="btnGenerate">Generate &amp; Extract GLB</button>
+        <button class="btn btn-secondary" id="btnGaussian" disabled>Extract Gaussian</button>
+      </div>
+      <div class="note">NOTE: Gaussian file can be very large (~50MB), it will take a while to display and download.</div>
+
+      <!-- 状态 -->
+      <div id="statusBar" class="hidden"></div>
+      <div id="progressWrap" class="hidden"><div class="progress-track"><div class="progress-bar" id="progressBar"></div></div></div>
+
+      <!-- ═══ Generated 3D Asset ═══ -->
+      <div class="block">
+        <div class="block-label">Generated 3D Asset</div>
+        <div class="model3d" id="model3d">
+          <model-viewer id="mv" camera-controls auto-rotate touch-action="none" exposure="1.2" shadow-intensity="1"></model-viewer>
+          <div class="placeholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 2v9M12 11l8-4.5M12 11L4 6.5M12 20v-9"/></svg>
+            <span>3D model will appear here</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Extracted GLB/Gaussian ═══ -->
+      <div class="block">
+        <div class="block-label">Extracted GLB/Gaussian</div>
+        <div class="button-row" style="margin:6px 0 0">
+          <a id="dlGlb" class="btn btn-secondary hidden" download>Download GLB</a>
+          <a id="dlGaussian" class="btn btn-secondary hidden" download>Download Gaussian</a>
+        </div>
+        <div class="note" id="fileInfo"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+<script>
+/* ═══ 滑块初始化 + 联动 ═══ */
+const FIELDS=['seed','ss_cfg','ss_steps','slat_cfg','slat_steps','simplify','texture_size'];
+function paint(id){
+  const r=document.getElementById(id);
+  const min=parseFloat(r.min),max=parseFloat(r.max),v=parseFloat(r.value);
+  r.style.setProperty('--range_progress',((v-min)/(max-min)*100)+'%');
+}
+FIELDS.forEach(id=>{const r=document.getElementById(id);r.value=r.dataset.default;r.addEventListener('input',()=>paint(id));paint(id);});
+function resetField(id){document.getElementById(id).value=document.getElementById(id).dataset.default;paint(id);}
+
+/* ═══ tabs ═══ */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('selected'));
+    t.classList.add('selected');
+    document.getElementById('panel-single').classList.toggle('active',t.dataset.tab==='single');
+    document.getElementById('panel-multiple').classList.toggle('active',t.dataset.tab==='multiple');
+  });
+});
+
+/* ═══ accordion ═══ */
+document.querySelectorAll('.accordion').forEach(acc=>{
+  acc.querySelector('.acc-head').addEventListener('click',()=>acc.classList.toggle('open'));
+});
+
+/* ═══ 上传 Single / Multiple ═══ */
+const dz=document.getElementById('dropzone'),fi=document.getElementById('fileInput');
+const dzm=document.getElementById('dropzoneMulti'),fim=document.getElementById('fileInputMulti');
+let currentFile=null;        // 单图模式
+let currentFiles=[];         // 多图模式
+
+function whichTab(){return document.querySelector('.tab.selected').dataset.tab;}
+
+function setFile(f){
+  currentFile=f;
+  dz.innerHTML='';
+  const img=document.createElement('img');img.className='preview';img.src=URL.createObjectURL(f);
+  dz.appendChild(img);dz.classList.add('has-model');
+}
+function setFiles(list){
+  currentFiles=Array.from(list).filter(f=>f.type.startsWith('image/'));
+  dzm.innerHTML='';
+  const line=document.createElement('div');
+  line.className='big';
+  line.textContent=currentFiles.length+' 张图已选择';
+  dzm.appendChild(line);
+  const sub=document.createElement('div');
+  sub.className='note';sub.style.margin='4px 0';
+  sub.textContent=currentFiles.map(f=>f.name).join(', ');
+  dzm.appendChild(sub);
+  dzm.classList.add('has-model');
+}
+
+dz.addEventListener('click',()=>fi.click());
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--color-accent)';});
+dz.addEventListener('dragleave',()=>{dz.style.borderColor='';});
+dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';if(e.dataTransfer.files[0])setFile(e.dataTransfer.files[0]);});
+fi.addEventListener('change',()=>{if(fi.files[0])setFile(fi.files[0]);});
+
+dzm.addEventListener('click',()=>fim.click());
+dzm.addEventListener('dragover',e=>{e.preventDefault();dzm.style.borderColor='var(--color-accent)';});
+dzm.addEventListener('dragleave',()=>{dzm.style.borderColor='';});
+dzm.addEventListener('drop',e=>{e.preventDefault();dzm.style.borderColor='';if(e.dataTransfer.files&&e.dataTransfer.files.length)setFiles(e.dataTransfer.files);});
+fim.addEventListener('change',()=>{if(fim.files&&fim.files.length)setFiles(fim.files);});
+
+/* ═══ API ═══ */
+const btnGen=document.getElementById('btnGenerate'),btnGau=document.getElementById('btnGaussian');
+const statusBar=document.getElementById('statusBar'),progWrap=document.getElementById('progressWrap'),progBar=document.getElementById('progressBar');
+const mv=document.getElementById('mv'),model3d=document.getElementById('model3d');
+const dlGlb=document.getElementById('dlGlb'),dlGau=document.getElementById('dlGaussian'),fileInfo=document.getElementById('fileInfo');
+
+function setStatus(msg,spin){statusBar.classList.remove('hidden');statusBar.innerHTML=(spin?'<span class="spinner"></span>':'')+msg;}
+function setProgress(p){progWrap.classList.remove('hidden');progBar.style.width=p+'%';}
+
+btnGen.addEventListener('click',()=>{
+  const tab=whichTab();
+  if(tab==='single' && !currentFile){setStatus('请先上传一张图片',false);return;}
+  if(tab==='multiple' && currentFiles.length===0){setStatus('请先在 Multiple Images 上传至少一张图片',false);return;}
+  const fd=new FormData();
+  if(tab==='single'){
+    fd.append('image',currentFile);
+  }else{
+    currentFiles.forEach(f=>fd.append('images',f));
+    const alg=document.querySelector('input[name=alg]:checked');
+    fd.append('mode',alg?alg.value:'stochastic');
+  }
+  const rnd=document.getElementById('randomize').checked;
+  fd.append('seed',rnd?'':document.getElementById('seed').value);
+  fd.append('ss_cfg',document.getElementById('ss_cfg').value);
+  fd.append('ss_steps',document.getElementById('ss_steps').value);
+  fd.append('slat_cfg',document.getElementById('slat_cfg').value);
+  fd.append('slat_steps',document.getElementById('slat_steps').value);
+  fd.append('texture_size',document.getElementById('texture_size').value);
+  fd.append('simplify',document.getElementById('simplify').value);
+  btnGen.disabled=true;btnGau.disabled=true;
+  setStatus('提交中...',true);setProgress(5);
+  fetch('/api/trellis/generate',{method:'POST',body:fd})
+    .then(r=>r.json())
+    .then(data=>{
+      setStatus('生成中，请稍候（约30-90秒）...',true);setProgress(15);
+      const t0=Date.now();
+      (function tick(){
+        fetch('/api/trellis/task/'+data.task_id).then(r=>r.json()).then(d=>{
+          if(d.status==='done'||d.status==='finished'){
+            setStatus(d.peakMB?('完成！峰值显存 '+d.peakMB+'MB'):'完成！',false);
+            setProgress(100);btnGen.disabled=false;loadResult(d);
+          }else if(d.status==='failed'||d.error){
+            setStatus('失败：'+(d.error||d.status),false);btnGen.disabled=false;
+          }else{
+            setProgress(Math.min(95,15+(Date.now()-t0)/700));
+            setTimeout(tick,1600);
+          }
+        }).catch(()=>setTimeout(tick,1600));
+      })();
+    })
+    .catch(e=>{setStatus('提交失败：'+e.message,false);btnGen.disabled=false;});
+});
+
+function loadResult(d){
+  if(d.glb_url){
+    model3d.classList.add('has-model');
+    mv.src=d.glb_url;
+    dlGlb.href=d.glb_url;dlGlb.classList.remove('hidden');
+  }
+  if(d.ply_url){
+    dlGau.href=d.ply_url;dlGau.classList.remove('hidden');btnGau.disabled=false;
+  }
+}
+</script>
+</body>
+</html>
