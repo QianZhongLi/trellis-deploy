@@ -6,9 +6,9 @@ GET  /api/trellis/task/{id} -> {status, glb_url, ply_url, preview_url, peakMB}
 GET  /api/trellis/task/{id}/file/{name} -> 下载 output.glb / output.ply / preview.gif
 
 每个任务 spawn 一个独立 python 子进程跑 run_gen_glb.py。
-并发队列限制(GPU_QUEUE),避免显存 OOM。
+并发队列限制(GPU_QUEUE)+显存预检,避免显存 OOM。
 """
-import os, sys, uuid, json, subprocess, shutil, threading, time
+import os, sys, uuid, json, subprocess, shutil, threading, time, re
 from typing import List
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form
@@ -25,6 +25,27 @@ GPU_QUEUE = int(os.environ.get("GPU_QUEUE", "1"))  # 并发上限, 显存有限�
 _sem = threading.Semaphore(GPU_QUEUE)
 _lock = threading.Lock()
 _procs = {}
+
+# ---- 显存预检配置 ----
+# 生成任务开始前要求的最少可用显存(GB)。TRELLIS 峰值 ~8G, 加载模型也需要几G,
+# 12G 卡上留足余量, 避免游戏等进程占卡时任务启动即 OOM 崩溃。
+VENV_NVCC = False
+MIN_FREE_GB = float(os.environ.get("MIN_FREE_GB", "2.5"))
+_RETRY_WAIT = float(os.environ.get("RETRY_WAIT", "15"))   # 显存不足时轮询间隔(秒)
+_RETRY_TIMEOUT = float(os.environ.get("RETRY_TIMEOUT", "0"))  # 0=无限等待
+
+def _gpu_free_gb():
+    """用 nvidia-smi 查询当前可用显存(GB), 失败返回 None。"""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+        line = out.stdout.strip().splitlines()[0]
+        free_mb, total_mb = [int(x.strip()) for x in line.split(",")]
+        return free_mb / 1024.0, total_mb / 1024.0
+    except Exception:
+        return None, None
 
 app = FastAPI(title="TRELLIS 3D API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -45,10 +66,12 @@ def root():
 
 @app.get("/api/health")
 def health():
+    free_gb, total_gb = _gpu_free_gb()
     return {
         "service": "trellis-3d", "status": "ok",
         "endpoints": ["/api/trellis/generate", "/api/trellis/task/{id}"],
         "defaults": DEFAULTS,
+        "gpu": {"free_gb": free_gb, "total_gb": total_gb, "min_free_gb": MIN_FREE_GB},
     }
 
 def _f(v, cast, dflt, lo=None, hi=None):
@@ -60,6 +83,17 @@ def _f(v, cast, dflt, lo=None, hi=None):
     if lo is not None and x < lo: return dflt
     if hi is not None and x > hi: return dflt
     return x
+
+def _wait_for_free_gpu(timeout=_RETRY_TIMEOUT):
+    """轮询等待 GPU 可用显存 >= MIN_FREE_GB。返回 (ok, free_gb)。"""
+    deadline = time.time() + timeout if timeout and timeout > 0 else None
+    while True:
+        free_gb, _ = _gpu_free_gb()
+        if free_gb is not None and free_gb >= MIN_FREE_GB:
+            return True, free_gb
+        if deadline and time.time() >= deadline:
+            return False, free_gb
+        time.sleep(_RETRY_WAIT)
 
 @app.post("/api/trellis/generate")
 async def generate(
@@ -74,6 +108,15 @@ async def generate(
     simplify: str = Form(""),
     mode: str = Form("stochastic"),
 ):
+    # ---- 显存预检: 不足直接 503, 不排队白跑 ----
+    ok, free_gb = _wait_for_free_gpu()
+    if not ok:
+        return JSONResponse({
+            "error": "gpu_busy",
+            "message": f"GPU 显存不足 (free={free_gb:.1f}GB < {MIN_FREE_GB}GB, 可能被其他进程占用)",
+            "free_gb": free_gb, "min_free_gb": MIN_FREE_GB,
+        }, status_code=503)
+
     task_id = uuid.uuid4().hex
     out_dir = TASKS_DIR / task_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -121,7 +164,7 @@ async def generate(
             with _lock: _procs.pop(task_id, None)
 
     threading.Thread(target=_run, daemon=True).start()
-    return {"task_id": task_id, "status_url": f"/api/trellis/task/{task_id}"}
+    return {"task_id": task_id, "status_url": f"/api/trellis/task/{task_id}", "free_gb": free_gb}
 
 @app.get("/api/trellis/task/{task_id}")
 def task_status(task_id: str):
